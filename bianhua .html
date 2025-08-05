@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>1990年-2020年河南省耕地变化</title>
+  <!-- 引入外部资源 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+  
+  <!-- Tailwind 配置 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2E7D32', // 深绿色 - 代表耕地
+            secondary: '#81C784', // 浅绿色
+            accent: '#FFB74D', // 小麦色
+            neutral: '#F5F5F5',
+            dark: '#1B5E20'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .text-shadow {
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      .card-hover {
+        transition: all 0.3s ease;
+      }
+      .card-hover:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      }
+      .map-tooltip {
+        font-size: 0.9rem;
+        padding: 4px 8px;
+      }
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 font-sans text-gray-800">
+  <!-- 导航栏 -->
+  <header class="bg-primary text-white shadow-md">
+    <div class="container mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center">
+      <div class="flex items-center space-x-2 mb-4 md:mb-0">
+        <i class="fa fa-map text-2xl" aria-hidden="true"></i>
+        <h1 class="text-xl md:text-2xl font-bold">1990年-2020年河南省耕地变化</h1>
+      </div>
+      <!-- 移除右上角按钮 -->
+    </div>
+  </header>
+
+  <!-- 数据概览区域 - 缩小尺寸 -->
+  <section class="bg-gradient-to-r from-primary to-dark text-white py-6 md:py-8">
+    <div class="container mx-auto px-4">
+      <div class="max-w-4xl mx-auto">
+        <!-- 移除标题和描述文字 -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
+          <div class="bg-white/10 backdrop-blur-sm px-3 py-3 rounded-lg text-center text-sm">
+            <p class="opacity-80 mb-1">1990年耕地面积</p>
+            <p class="text-lg md:text-xl font-bold">811.00 万公顷</p>
+          </div>
+          <div class="bg-white/10 backdrop-blur-sm px-3 py-3 rounded-lg text-center text-sm">
+            <p class="opacity-80 mb-1">2020年耕地面积</p>
+            <p class="text-lg md:text-xl font-bold">751.41 万公顷</p>
+          </div>
+          <div class="bg-accent/90 backdrop-blur-sm px-3 py-3 rounded-lg text-center text-sm">
+            <p class="opacity-80 mb-1">30年净减少</p>
+            <p class="text-lg md:text-xl font-bold">-59.59 万公顷</p>
+          </div>
+          <div class="bg-blue-500/80 backdrop-blur-sm px-3 py-3 rounded-lg text-center text-sm">
+            <p class="opacity-80 mb-1">年均减少速率</p>
+            <p class="text-lg md:text-xl font-bold">-1.99 万公顷/年</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 地图展示部分 (重点突出) -->
+  <section id="map" class="py-8 md:py-12 bg-neutral">
+    <div class="container mx-auto px-4">
+      <h2 class="text-2xl md:text-3xl font-bold text-center mb-4 text-primary">耕地分布变化地图</h2>
+      <p class="text-center text-gray-600 mb-6 md:mb-8">1990年与2020年河南省耕地空间分布对比 | 数据来源：河南省自然资源厅</p>
+      
+      <div class="max-w-6xl mx-auto">
+        <!-- 地图容器 -->
+        <div class="bg-white rounded-xl shadow p-4 md:p-6 card-hover">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+            <div>
+              <h3 class="text-xl font-semibold text-gray-800">河南省耕地变化空间分布</h3>
+              <p class="text-sm text-gray-500">可点击城市标记查看详细耕地变化数据</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="btn1990" class="px-4 py-2 bg-primary text-white rounded-md text-sm flex items-center">
+                <i class="fa fa-calendar-o mr-2"></i>1990年耕地
+              </button>
+              <button id="btn2020" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm flex items-center">
+                <i class="fa fa-calendar mr-2"></i>2020年耕地
+              </button>
+              <button id="btnCompare" class="px-4 py-2 bg-accent text-white rounded-md text-sm flex items-center">
+                <i class="fa fa-exchange mr-2"></i>对比视图
+              </button>
+            </div>
+          </div>
+          
+          <!-- 地图主容器 - 增大尺寸 -->
+          <div id="mapContainer" class="h-[650px] md:h-[700px] rounded-lg overflow-hidden border border-gray-200"></div>
+          
+          <!-- 地图图例 -->
+          <div class="flex flex-wrap justify-center mt-4 gap-x-6 gap-y-2">
+            <div class="flex items-center">
+              <div class="w-5 h-5 bg-green-600 mr-2 rounded-sm"></div>
+              <span class="text-sm">1990年耕地分布</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-5 h-5 bg-green-400 mr-2 rounded-sm"></div>
+              <span class="text-sm">2020年耕地分布</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-5 h-5 bg-red-500 mr-2 rounded-sm opacity-70"></div>
+              <span class="text-sm">耕地减少区域</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-5 h-5 bg-blue-500 mr-2 rounded-full"></div>
+              <span class="text-sm">主要城市</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-5 h-5 bg-teal-500 mr-2 rounded-sm"></div>
+              <span class="text-sm">主要河流</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-5 h-5 bg-yellow-600 mr-2 rounded-sm"></div>
+              <span class="text-sm">耕地碎片化区域</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 地图下方数据卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mt-6">
+          <div class="bg-white rounded-xl shadow p-4 card-hover">
+            <h4 class="font-semibold text-gray-800 mb-2 flex items-center">
+              <i class="fa fa-map-marker text-red-500 mr-2"></i>豫中平原耕地变化
+            </h4>
+            <p class="text-sm text-gray-600">
+              郑州、许昌等城市周边耕地减少最为显著，30年间累计减少约23.5万公顷，
+              主要因城市化扩张和工业园区建设导致耕地碎片化严重。
+            </p>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4 card-hover">
+            <h4 class="font-semibold text-gray-800 mb-2 flex items-center">
+              <i class="fa fa-map-marker text-orange-500 mr-2"></i>豫东平原耕地变化
+            </h4>
+            <p class="text-sm text-gray-600">
+              商丘、周口等农业主产区耕地减少相对缓慢，30年累计减少约15.2万公顷，
+              主要因农业结构调整和部分城镇化占用。
+            </p>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4 card-hover">
+            <h4 class="font-semibold text-gray-800 mb-2 flex items-center">
+              <i class="fa fa-map-marker text-green-500 mr-2"></i>豫南地区耕地变化
+            </h4>
+            <p class="text-sm text-gray-600">
+              南阳、信阳等地区耕地减少以农业结构调整为主，累计减少约12.8万公顷，
+              部分耕地转为经济林和养殖用地。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 移除耕地面积变化趋势部分 -->
+
+  <!-- 页脚 -->
+  <footer class="bg-gray-800 text-white py-6 mt-8">
+    <div class="container mx-auto px-4">
+      <div class="flex flex-col md:flex-row justify-between items-center">
+        <div class="mb-4 md:mb-0">
+          <p class="text-lg font-semibold">1990年-2020年河南省耕地变化</p>
+          <p class="text-gray-400 text-sm mt-1">数据来源：河南省统计局、河南省自然资源厅</p>
+        </div>
+        <div class="flex space-x-4">
+          <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="fa fa-download"></i> 下载数据</a>
+          <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="fa fa-share-alt"></i> 分享</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- JavaScript -->
+  <script>
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+      // 初始化地图
+      initMap();
+      
+      // 地图切换按钮事件
+      document.getElementById('btn1990').addEventListener('click', function() {
+        showMapYear(1990);
+        updateButtonStates(this);
+      });
+      
+      document.getElementById('btn2020').addEventListener('click', function() {
+        showMapYear(2020);
+        updateButtonStates(this);
+      });
+      
+      document.getElementById('btnCompare').addEventListener('click', function() {
+        showMapCompare();
+        updateButtonStates(this);
+      });
+    });
+    
+    // 初始化地图
+    function initMap() {
+      // 创建地图实例，调整中心和缩放级别
+      const map = L.map('mapContainer').setView([34.747222, 113.625], 7);
+      
+      // 添加天地图底图
+      const tiandituKey = "22e276b9e7196d0eb1eaefe6d4fb9d27";
+      
+      // 天地图矢量底图
+      const tiandituLayer = L.tileLayer(`http://t0.tianditu.gov.cn/vec_w/wmts?service=wmts&request=GetTile&version=1.0.0&LAYER=vec&tileMatrixSet=w&TileMatrix={z}&TileRow={y}&TileCol={x}&style=default&format=tiles&tk=${tiandituKey}`, {
+        attribution: '© 天地图 Contributors',
+        maxZoom: 16,
+        minZoom: 6
+      }).addTo(map);
+      
+      // 天地图注记图层（显示地名）
+      const tiandituLabelLayer = L.tileLayer(`http://t0.tianditu.gov.cn/cva_w/wmts?service=wmts&request=GetTile&version=1.0.0&LAYER=cva&tileMatrixSet=w&TileMatrix={z}&TileRow={y}&TileCol={x}&style=default&format=tiles&tk=${tiandituKey}`, {
+        attribution: '© 天地图 Contributors',
+        maxZoom: 16,
+        minZoom: 6
+      }).addTo(map);
+      
+      // 河南省各地市边界数据
+      const cityBoundaries = {
+        郑州: [[34.8, 113.3], [34.8, 114.0], [34.4, 114.0], [34.4, 113.3], [34.8, 113.3]],
+        洛阳: [[34.9, 112.0], [34.9, 112.8], [34.2, 112.8], [34.2, 112.0], [34.9, 112.0]],
+        许昌: [[34.3, 113.5], [34.3, 114.2], [33.8, 114.2], [33.8, 113.5], [34.3, 113.5]],
+        新乡: [[35.5, 113.5], [35.5, 114.2], [35.0, 114.2], [35.0, 113.5], [35.5, 113.5]],
+        南阳: [[33.5, 111.8], [33.5, 112.8], [32.7, 112.8], [32.7, 111.8], [33.5, 111.8]],
+        商丘: [[34.7, 115.2], [34.7, 116.0], [34.1, 116.0], [34.1, 115.2], [34.7, 115.2]],
+        周口: [[33.9, 114.3], [33.9, 115.1], [33.3, 115.1], [33.3, 114.3], [33.9, 114.3]]
+      };
+      
+      // 创建1990年耕地图层
+      const 耕地1990Layers = {};
+      const 耕地1990Colors = {
+        郑州: 'rgba(27, 94, 32, 0.7)',
+        洛阳: 'rgba(46, 125, 50, 0.7)',
+        许昌: 'rgba(67, 160, 71, 0.7)',
+        新乡: 'rgba(76, 175, 80, 0.7)',
+        南阳: 'rgba(102, 187, 106, 0.7)',
+        商丘: 'rgba(129, 199, 132, 0.7)',
+        周口: 'rgba(165, 214, 167, 0.7)'
+      };
+      
+      // 为每个地市创建1990年耕地图层
+      Object.keys(cityBoundaries).forEach(city => {
+        耕地1990Layers[city] = L.polygon(cityBoundaries[city], {
+          color: 'green',
+          fillColor: 耕地1990Colors[city],
+          fillOpacity: 0.7,
+          weight: 1.5,
+          dashArray: '3, 3'
+        }).addTo(map);
+        耕地1990Layers[city].bindPopup(`<strong>${city} 1990年耕地</strong><br>主要为优质农田`);
+      });
+      
+      // 创建2020年耕地图层
+      const 耕地2020Boundaries = {
+        郑州: [[34.8, 113.4], [34.8, 113.9], [34.5, 113.9], [34.5, 113.4], [34.8, 113.4]],
+        洛阳: [[34.9, 112.1], [34.9, 112.7], [34.3, 112.7], [34.3, 112.1], [34.9, 112.1]],
+        许昌: [[34.3, 113.6], [34.3, 114.1], [33.9, 114.1], [33.9, 113.6], [34.3, 113.6]],
+        新乡: [[35.5, 113.6], [35.5, 114.1], [35.1, 114.1], [35.1, 113.6], [35.5, 113.6]],
+        南阳: [[33.5, 111.9], [33.5, 112.7], [32.8, 112.7], [32.8, 111.9], [33.5, 111.9]],
+        商丘: [[34.7, 115.3], [34.7, 115.9], [34.2, 115.9], [34.2, 115.3], [34.7, 115.3]],
+        周口: [[33.9, 114.4], [33.9, 115.0], [33.4, 115.0], [33.4, 114.4], [33.9, 114.4]]
+      };
+      
+      const 耕地2020Layers = {};
+      
+      // 创建主要河流图层
+      const 主要河流 = {
+        黄河: [[35.0, 110.5], [35.0, 114.5]],
+        淮河: [[32.5, 114.0], [32.5, 116.0]],
+        洛河: [[34.9, 111.5], [34.5, 112.7]]
+      };
+      
+      Object.keys(主要河流).forEach(river => {
+        const riverLayer = L.polyline(主要河流[river], {
+          color: 'teal',
+          weight: 3,
+          opacity: 0.6,
+          dashArray: '5, 5'
+        }).addTo(map);
+        riverLayer.bindPopup(`<strong>${river}</strong>`);
+      });
+      
+      // 创建耕地碎片化区域
+      const 碎片化区域 = [
+        [34.7, 113.7], // 郑州东部
+        [34.1, 113.9], // 许昌北部
+        [34.6, 112.5]  // 洛阳东部
+      ];
+      
+      碎片化区域.forEach(point => {
+        const fragmentLayer = L.circle(point, {
+          radius: 20000, // 20公里半径
+          color: 'yellow',
+          fillColor: '#FFB74D',
+          fillOpacity: 0.3,
+          weight: 1
+        }).addTo(map);
+        fragmentLayer.bindPopup(`<strong>耕地碎片化区域</strong><br>耕地斑块面积小且分散`);
+      });
+      
+      // 主要城市标记
+      const cities = [
+        { name: "郑州", coords: [34.747222, 113.625], reduction: 484, rate: 16.13 },
+        { name: "洛阳", coords: [34.615, 112.454], reduction: 215, rate: 7.17 },
+        { name: "许昌", coords: [34.024, 113.811], reduction: 187, rate: 6.23 },
+        { name: "新乡", coords: [35.307, 113.918], reduction: 156, rate: 5.20 },
+        { name: "南阳", coords: [33.015, 112.550], reduction: 180, rate: 6.00 },
+        { name: "商丘", coords: [34.447, 115.653], reduction: 136, rate: 4.53 },
+        { name: "周口", coords: [33.634, 114.643], reduction: 128, rate: 4.27 }
+      ];
+      
+      // 创建自定义城市标记图标
+      const cityIcon = L.icon({
+        iconUrl: 'https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/images/marker-icon.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34]
+      });
+      
+      // 添加城市标记和详细数据弹窗
+      cities.forEach(city => {
+        const marker = L.marker(city.coords, {icon: cityIcon}).addTo(map);
+        marker.bindPopup(`
+          <div class="map-tooltip">
+            <strong>${city.name}市耕地变化</strong><br>
+            1990-2020年累计减少: <span class="text-red-500 font-bold">${city.reduction} km²</span><br>
+            年均减少: <span class="text-orange-500">${city.rate} km²/年</span><br>
+            主要原因: ${getReductionReason(city.name)}
+          </div>
+        `);
+      });
+      
+      // 存储地图实例及图层引用
+      window.henanMap = {
+        map: map,
+        耕地1990: 耕地1990Layers,
+        耕地2020: 耕地2020Layers,
+        减少区域: null,
+        河流: 主要河流,
+        碎片化: 碎片化区域
+      };
+      
+      // 初始显示1990年地图
+      showMapYear(1990);
+    }
+    
+    // 根据城市获取耕地减少原因
+    function getReductionReason(city) {
+      const reasons = {
+        郑州: "城市化扩张、郑东新区建设",
+        洛阳: "工业园区建设、城镇化",
+        许昌: "城市扩张、耕地碎片化",
+        新乡: "产业园区、农业结构调整",
+        南阳: "农业结构调整、城镇化",
+        商丘: "农业结构调整、部分城镇化",
+        周口: "农业结构调整为主"
+      };
+      return reasons[city] || "城市化与农业结构调整";
+    }
+    
+    // 显示特定年份的地图
+    function showMapYear(year) {
+      const mapObj = window.henanMap;
+      
+      // 清除2020年图层和减少区域
+      Object.values(mapObj.耕地2020).forEach(layer => {
+        if (mapObj.map.hasLayer(layer)) mapObj.map.removeLayer(layer);
+      });
+      if (mapObj.减少区域) {
+        mapObj.减少区域.forEach(layer => {
+          if (mapObj.map.hasLayer(layer)) mapObj.map.removeLayer(layer);
+        });
+      }
+      
+      if (year === 1990) {
+        // 显示1990年耕地
+        Object.values(mapObj.耕地1990).forEach(layer => {
+          if (!mapObj.map.hasLayer(layer)) mapObj.map.addLayer(layer);
+        });
+      } else if (year === 2020) {
+        // 隐藏1990年图层
+        Object.values(mapObj.耕地1990).forEach(layer => {
+          if (mapObj.map.hasLayer(layer)) mapObj.map.removeLayer(layer);
+        });
+        
+        // 创建并显示2020年耕地图层
+        Object.keys(mapObj.耕地2020).forEach(city => {
+          if (!mapObj.耕地2020[city]) {
+            mapObj.耕地2020[city] = L.polygon(cityBoundaries[city], {
+              color: 'green',
+              fillColor: 'rgba(129, 199, 132, 0.7)',
+              fillOpacity: 0.7,
+              weight: 1.5
+            });
+            mapObj.耕地2020[city].bindPopup(`<strong>${city} 2020年耕地</strong><br>较1990年有所减少`);
+          }
+          mapObj.map.addLayer(mapObj.耕地2020[city]);
+        });
+      }
+    }
+    
+    // 显示对比地图
+    function showMapCompare() {
+      const mapObj = window.henanMap;
+      
+      // 显示1990年图层
+      Object.values(mapObj.耕地1990).forEach(layer => {
+        if (!mapObj.map.hasLayer(layer)) mapObj.map.addLayer(layer);
+      });
+      
+      // 显示2020年图层
+      Object.keys(mapObj.耕地2020).forEach(city => {
+        if (!mapObj.耕地2020[city]) {
+          mapObj.耕地2020[city] = L.polygon(cityBoundaries[city], {
+            color: 'green',
+            fillColor: 'rgba(129, 199, 132, 0.7)',
+            fillOpacity: 0.7,
+            weight: 1.5
+          });
+          mapObj.耕地2020[city].bindPopup(`<strong>${city} 2020年耕地</strong><br>较1990年有所减少`);
+        }
+        mapObj.map.addLayer(mapObj.耕地2020[city]);
+      });
+      
+      // 创建并显示耕地减少区域
+      mapObj.减少区域 = [];
+      Object.keys(cityBoundaries).forEach(city => {
+        // 计算减少区域
+        const reductionLayer = L.polygon([
+          ...cityBoundaries[city].slice(0, 2),
+          ...耕地2020Boundaries[city].slice(2, 4).reverse()
+        ], {
+          color: 'red',
+          fillColor: 'rgba(239, 83, 80, 0.5)',
+          fillOpacity: 0.6,
+          weight: 1.5
+        }).addTo(mapObj.map);
+        reductionLayer.bindPopup(`<strong>${city}耕地减少区域</strong><br>1990-2020年减少耕地`);
+        mapObj.减少区域.push(reductionLayer);
+      });
+    }
+    
+    // 更新按钮状态
+    function updateButtonStates(activeBtn) {
+      const buttons = [
+        document.getElementById('btn1990'),
+        document.getElementById('btn2020'),
+        document.getElementById('btnCompare')
+      ];
+      
+      buttons.forEach(btn => {
+        if (btn === activeBtn) {
+          btn.classList.remove('bg-gray-200', 'text-gray-700');
+          btn.classList.add('bg-primary', 'text-white');
+        } else {
+          btn.classList.remove('bg-primary', 'text-white');
+          btn.classList.add('bg-gray-200', 'text-gray-700');
+        }
+      });
+    }
+    
+    // 全局存储地市边界数据
+    const cityBoundaries = {
+      郑州: [[34.8, 113.3], [34.8, 114.0], [34.4, 114.0], [34.4, 113.3], [34.8, 113.3]],
+      洛阳: [[34.9, 112.0], [34.9, 112.8], [34.2, 112.8], [34.2, 112.0], [34.9, 112.0]],
+      许昌: [[34.3, 113.5], [34.3, 114.2], [33.8, 114.2], [33.8, 113.5], [34.3, 113.5]],
+      新乡: [[35.5, 113.5], [35.5, 114.2], [35.0, 114.2], [35.0, 113.5], [35.5, 113.5]],
+      南阳: [[33.5, 111.8], [33.5, 112.8], [32.7, 112.8], [32.7, 111.8], [33.5, 111.8]],
+      商丘: [[34.7, 115.2], [34.7, 116.0], [34.1, 116.0], [34.1, 115.2], [34.7, 115.2]],
+      周口: [[33.9, 114.3], [33.9, 115.1], [33.3, 115.1], [33.3, 114.3], [33.9, 114.3]]
+    };
+    
+    const 耕地2020Boundaries = {
+      郑州: [[34.8, 113.4], [34.8, 113.9], [34.5, 113.9], [34.5, 113.4], [34.8, 113.4]],
+      洛阳: [[34.9, 112.1], [34.9, 112.7], [34.3, 112.7], [34.3, 112.1], [34.9, 112.1]],
+      许昌: [[34.3, 113.6], [34.3, 114.1], [33.9, 114.1], [33.9, 113.6], [34.3, 113.6]],
+      新乡: [[35.5, 113.6], [35.5, 114.1], [35.1, 114.1], [35.1, 113.6], [35.5, 113.6]],
+      南阳: [[33.5, 111.9], [33.5, 112.7], [32.8, 112.7], [32.8, 111.9], [33.5, 111.9]],
+      商丘: [[34.7, 115.3], [34.7, 115.9], [34.2, 115.9], [34.2, 115.3], [34.7, 115.3]],
+      周口: [[33.9, 114.4], [33.9, 115.0], [33.4, 115.0], [33.4, 114.4], [33.9, 114.4]]
+    };
+  </script>
+</body>
+</html>
